@@ -7,13 +7,21 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body
         style={{
           margin: 0,
-          fontFamily:
-            "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-          background: "#f4f6f5",
-          color: "#1a2e1f",
+          fontFamily: "'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif",
+          fontWeight: 300,
+          background: "#f4f4f4",
+          color: "#111",
         }}
       >
         {children}

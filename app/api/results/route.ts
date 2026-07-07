@@ -5,8 +5,6 @@ import { SECTIONS } from "@/lib/questions";
 
 export const dynamic = "force-dynamic";
 
-const WEAK_THRESHOLD = 0.7; // debajo de 70% de acierto se considera oportunidad de mejora
-
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const pass = searchParams.get("password");
@@ -22,22 +20,49 @@ export async function GET(req: Request) {
     FROM submissions;
   `;
 
-  const bySection = await sql`
-    SELECT section_id, section_title,
+  // 1. Preguntas con más errores + departamento que más falla en cada una
+  const weakestQuestions = await sql`
+    SELECT question_id, section_title,
            COUNT(*)::int AS total_answers,
            SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::int AS correct_answers
     FROM answers
-    GROUP BY section_id, section_title
-    ORDER BY (SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::float / COUNT(*)) ASC;
+    GROUP BY question_id, section_title
+    ORDER BY (SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::float / COUNT(*)) ASC
+    LIMIT 10;
   `;
 
+  const questionByDept = await sql`
+    SELECT a.question_id, s.department,
+           COUNT(*)::int AS total_answers,
+           SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END)::int AS correct_answers
+    FROM answers a
+    JOIN submissions s ON a.submission_id = s.id
+    GROUP BY a.question_id, s.department;
+  `;
+
+  const weakestDeptByQuestion: Record<string, { department: string; ratio: number }> = {};
+  for (const row of questionByDept as any[]) {
+    const ratio = row.correct_answers / row.total_answers;
+    const current = weakestDeptByQuestion[row.question_id];
+    if (!current || ratio < current.ratio) {
+      weakestDeptByQuestion[row.question_id] = { department: row.department, ratio };
+    }
+  }
+
+  const weakestQuestionsWithDept = (weakestQuestions as any[]).map((q) => ({
+    ...q,
+    weakest_department: weakestDeptByQuestion[q.question_id]?.department || null,
+    weakest_department_ratio: weakestDeptByQuestion[q.question_id]?.ratio ?? null,
+  }));
+
+  // 2. Ranking por departamento
   const byDepartment = await sql`
     SELECT department,
            COUNT(*)::int AS submissions,
            AVG(score::float / total)::float AS avg_ratio
     FROM submissions
     GROUP BY department
-    ORDER BY avg_ratio ASC;
+    ORDER BY avg_ratio DESC;
   `;
 
   const byDepartmentSection = await sql`
@@ -50,6 +75,7 @@ export async function GET(req: Request) {
     ORDER BY s.department, (SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END)::float / COUNT(*)) ASC;
   `;
 
+  // 3. Ranking por usuario (Top 10 / Bottom 10)
   const byPerson = await sql`
     SELECT employee_name,
            (ARRAY_AGG(department ORDER BY created_at DESC))[1] AS department,
@@ -60,17 +86,30 @@ export async function GET(req: Request) {
     GROUP BY employee_name
     ORDER BY avg_ratio DESC;
   `;
+  const personRows = byPerson as any[];
+  const topPerformers = personRows.slice(0, 10);
+  const bottomPerformers = [...personRows].slice(-10).reverse();
 
-  const byQuestion = await sql`
-    SELECT question_id, section_title,
+  // 4. Top 10 de consejos de reentrenamiento (procesos más débiles con su tip)
+  const bySection = await sql`
+    SELECT section_id, section_title,
            COUNT(*)::int AS total_answers,
            SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::int AS correct_answers
     FROM answers
-    GROUP BY question_id, section_title
+    GROUP BY section_id, section_title
     ORDER BY (SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::float / COUNT(*)) ASC
     LIMIT 10;
   `;
+  const tipsBySection: Record<string, string> = {};
+  SECTIONS.forEach((s) => (tipsBySection[s.id] = s.tip));
+  const reinforcementRanking = (bySection as any[]).map((s) => ({
+    sectionId: s.section_id,
+    sectionTitle: s.section_title,
+    accuracy: s.correct_answers / s.total_answers,
+    tip: tipsBySection[s.section_id] || "Repasar este proceso en el manual.",
+  }));
 
+  // 5. Respuestas recientes
   const recent = await sql`
     SELECT employee_name, department, score, total, created_at
     FROM submissions
@@ -78,33 +117,14 @@ export async function GET(req: Request) {
     LIMIT 25;
   `;
 
-  // Consejos de reentrenamiento: secciones con acierto general debajo del umbral
-  const sectionTips: Record<string, string> = {};
-  SECTIONS.forEach((s) => (sectionTips[s.id] = s.tip));
-
-  const reinforcementTips = (bySection as any[])
-    .filter((s) => s.total_answers > 0 && s.correct_answers / s.total_answers < WEAK_THRESHOLD)
-    .map((s) => ({
-      sectionId: s.section_id,
-      sectionTitle: s.section_title,
-      accuracy: s.correct_answers / s.total_answers,
-      tip: sectionTips[s.section_id] || "Reforzar este proceso con el manual y casos prácticos.",
-    }));
-
-  const personRows = byPerson as any[];
-  const topPerformers = [...personRows].slice(0, 5);
-  const bottomPerformers = [...personRows].slice(-5).reverse();
-
   return NextResponse.json({
     overall: (overall as any[])[0],
-    bySection,
+    weakestQuestions: weakestQuestionsWithDept,
     byDepartment,
     byDepartmentSection,
-    byPerson,
     topPerformers,
     bottomPerformers,
-    weakestQuestions: byQuestion,
-    reinforcementTips,
+    reinforcementRanking,
     recent,
   });
 }

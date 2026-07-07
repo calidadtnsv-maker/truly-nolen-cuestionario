@@ -1,31 +1,35 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 
 const BRAND_RED = "#FF0000";
 const BRAND_YELLOW = "#FFD62B";
 const BRAND_BLACK = "#000000";
-// Semáforo funcional para % de acierto (no son colores de marca, son indicadores)
 const GOOD = "#1B7A3D";
-const MID = "#FFD62B";
+const MID = "#C9A400";
 const BAD = "#FF0000";
 
-type SectionStat = { section_id: string; section_title: string; total_answers: number; correct_answers: number };
+type WeakQuestion = {
+  question_id: string;
+  section_title: string;
+  total_answers: number;
+  correct_answers: number;
+  weakest_department: string | null;
+  weakest_department_ratio: number | null;
+};
 type DeptStat = { department: string; submissions: number; avg_ratio: number };
 type DeptSectionStat = { department: string; section_id: string; section_title: string; total_answers: number; correct_answers: number };
 type PersonStat = { employee_name: string; department: string; attempts: number; avg_ratio: number; last_attempt: string };
-type Tip = { sectionId: string; sectionTitle: string; accuracy: number; tip: string };
+type TipRank = { sectionId: string; sectionTitle: string; accuracy: number; tip: string };
 
 type Results = {
   overall: { total_submissions: number; avg_ratio: number };
-  bySection: SectionStat[];
+  weakestQuestions: WeakQuestion[];
   byDepartment: DeptStat[];
   byDepartmentSection: DeptSectionStat[];
-  byPerson: PersonStat[];
   topPerformers: PersonStat[];
   bottomPerformers: PersonStat[];
-  weakestQuestions: { question_id: string; section_title: string; total_answers: number; correct_answers: number }[];
-  reinforcementTips: Tip[];
+  reinforcementRanking: TipRank[];
   recent: { employee_name: string; department: string; score: number; total: number; created_at: string }[];
 };
 
@@ -50,24 +54,11 @@ export default function Dashboard() {
     }
   }
 
-  const departmentOpportunities = useMemo(() => {
-    if (!data) return {};
-    const map: Record<string, DeptSectionStat[]> = {};
-    for (const row of data.byDepartmentSection) {
-      if (!map[row.department]) map[row.department] = [];
-      map[row.department].push(row);
-    }
-    // Ya vienen ordenadas por acierto ascendente desde la API; nos quedamos con las 2 más débiles
-    Object.keys(map).forEach((dep) => {
-      map[dep] = map[dep].slice(0, 2);
-    });
-    return map;
-  }, [data]);
-
   if (!data) {
     return (
       <div style={{ maxWidth: 420, margin: "80px auto", padding: 20 }}>
-        <h2 style={{ color: BRAND_BLACK }}>Panel de resultados</h2>
+        <img src="/logo.jpg" alt="Truly Nolen" style={{ height: 100, display: "block", marginBottom: 20 }} />
+        <h2 style={{ color: BRAND_BLACK, fontWeight: 400 }}>Panel de resultados</h2>
         <input
           type="password"
           placeholder="Contraseña del panel"
@@ -79,7 +70,7 @@ export default function Dashboard() {
         <button
           onClick={load}
           disabled={loading}
-          style={{ marginTop: 12, background: BRAND_RED, color: "white", border: "none", borderRadius: 8, padding: "10px 20px", cursor: "pointer" }}
+          style={{ marginTop: 12, background: BRAND_RED, color: "white", border: "none", borderRadius: 8, padding: "10px 20px", cursor: "pointer", fontWeight: 400 }}
         >
           {loading ? "Cargando..." : "Entrar"}
         </button>
@@ -90,96 +81,21 @@ export default function Dashboard() {
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "40px 20px 80px" }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/logo.jpg" alt="Truly Nolen" style={{ height: 56, display: "block", marginBottom: 16 }} />
-      <h1 style={{ color: BRAND_BLACK }}>Panel de resultados — dónde reforzar</h1>
+      <img src="/logo.jpg" alt="Truly Nolen" style={{ height: 100, display: "block", marginBottom: 16 }} />
+      <h1 style={{ color: BRAND_BLACK, fontWeight: 400 }}>Panel de resultados — dónde reforzar</h1>
       <p style={{ color: "#556" }}>
         {data.overall.total_submissions} cuestionarios respondidos · promedio general{" "}
         {Math.round((data.overall.avg_ratio || 0) * 100)}%
       </p>
 
-      <Card title="Consejos de reentrenamiento">
-        {data.reinforcementTips.length === 0 ? (
-          <p style={{ color: "#556", fontSize: 14 }}>
-            Ningún proceso está por debajo del 70% de acierto general. Sin focos rojos por ahora.
-          </p>
-        ) : (
-          data.reinforcementTips.map((t) => (
-            <div key={t.sectionId} style={tipBox}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, color: BRAND_RED, fontSize: 14 }}>
-                <span>{t.sectionTitle}</span>
-                <span>{Math.round(t.accuracy * 100)}% de acierto</span>
-              </div>
-              <p style={{ margin: "6px 0 0", fontSize: 14, color: "#334" }}>{t.tip}</p>
-            </div>
-          ))
-        )}
-      </Card>
-
-      <Card title="Oportunidades de mejora — general (por proceso)">
-        {data.bySection.map((s) => (
-          <BarRow key={s.section_id} label={s.section_title} pct={Math.round((s.correct_answers / s.total_answers) * 100)} />
-        ))}
-      </Card>
-
-      <Card title="Oportunidades de mejora — por departamento">
-        <p style={{ fontSize: 13, color: "#667", marginTop: -8 }}>
-          Nivel general y los 2 procesos más débiles de cada departamento.
-        </p>
-        {data.byDepartment.map((d) => (
-          <div key={d.department} style={{ marginBottom: 18 }}>
-            <BarRow label={`${d.department} — general (${d.submissions} resp.)`} pct={Math.round((d.avg_ratio || 0) * 100)} bold />
-            {(departmentOpportunities[d.department] || []).map((row) => (
-              <div key={row.section_id} style={{ paddingLeft: 16 }}>
-                <BarRow
-                  label={row.section_title}
-                  pct={Math.round((row.correct_answers / row.total_answers) * 100)}
-                  small
-                />
-              </div>
-            ))}
-          </div>
-        ))}
-      </Card>
-
-      <Card title="Top calificados (general)">
-        <RankTable rows={data.topPerformers} highlight="green" />
-      </Card>
-
-      <Card title="Necesitan más apoyo (general)">
-        <RankTable rows={data.bottomPerformers} highlight="red" />
-      </Card>
-
-      <Card title="Resultados por persona">
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-          <thead>
-            <tr style={{ textAlign: "left", color: "#667" }}>
-              <th style={{ padding: 6 }}>Empleado</th>
-              <th style={{ padding: 6 }}>Departamento</th>
-              <th style={{ padding: 6 }}>Intentos</th>
-              <th style={{ padding: 6 }}>Promedio</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.byPerson.map((p) => (
-              <tr key={p.employee_name} style={{ borderTop: "1px solid #eee" }}>
-                <td style={{ padding: 6 }}>{p.employee_name}</td>
-                <td style={{ padding: 6 }}>{p.department}</td>
-                <td style={{ padding: 6 }}>{p.attempts}</td>
-                <td style={{ padding: 6, fontWeight: 600 }}>{Math.round((p.avg_ratio || 0) * 100)}%</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-
-      <Card title="Preguntas específicas más falladas">
+      <Card title="1. Preguntas con más errores">
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
           <thead>
             <tr style={{ textAlign: "left", color: "#667" }}>
               <th style={{ padding: 6 }}>Pregunta</th>
               <th style={{ padding: 6 }}>Sección</th>
-              <th style={{ padding: 6 }}>% acierto</th>
+              <th style={{ padding: 6 }}>% acierto general</th>
+              <th style={{ padding: 6 }}>Departamento que más falla</th>
             </tr>
           </thead>
           <tbody>
@@ -188,13 +104,59 @@ export default function Dashboard() {
                 <td style={{ padding: 6 }}>{q.question_id}</td>
                 <td style={{ padding: 6 }}>{q.section_title}</td>
                 <td style={{ padding: 6 }}>{Math.round((q.correct_answers / q.total_answers) * 100)}%</td>
+                <td style={{ padding: 6, color: BRAND_RED }}>
+                  {q.weakest_department
+                    ? `${q.weakest_department} (${Math.round((q.weakest_department_ratio || 0) * 100)}%)`
+                    : "—"}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </Card>
 
-      <Card title="Respuestas recientes">
+      <Card title="2. Ranking por departamento">
+        {data.byDepartment.map((d, i) => (
+          <BarRow key={d.department} label={`${i + 1}. ${d.department} (${d.submissions} resp.)`} pct={Math.round((d.avg_ratio || 0) * 100)} bold />
+        ))}
+        <p style={{ fontSize: 13, color: "#667", marginTop: 16, marginBottom: 8 }}>Procesos más débiles por departamento:</p>
+        {Object.entries(groupByDept(data.byDepartmentSection)).map(([dep, rows]) => (
+          <div key={dep} style={{ marginBottom: 12 }}>
+            <p style={{ fontSize: 13, fontWeight: 400, margin: "0 0 4px" }}>{dep}</p>
+            {rows.slice(0, 2).map((row) => (
+              <div key={row.section_id} style={{ paddingLeft: 16 }}>
+                <BarRow label={row.section_title} pct={Math.round((row.correct_answers / row.total_answers) * 100)} small />
+              </div>
+            ))}
+          </div>
+        ))}
+      </Card>
+
+      <Card title="3. Ranking por usuario — Top 10">
+        <RankTable rows={data.topPerformers} highlight="green" />
+      </Card>
+
+      <Card title="3. Ranking por usuario — Bottom 10">
+        <RankTable rows={data.bottomPerformers} highlight="red" />
+      </Card>
+
+      <Card title="4. Top 10 — Consejos de reentrenamiento">
+        {data.reinforcementRanking.length === 0 ? (
+          <p style={{ color: "#556", fontSize: 14 }}>Aún no hay suficientes datos.</p>
+        ) : (
+          data.reinforcementRanking.map((t, i) => (
+            <div key={t.sectionId} style={tipBox}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 400, color: BRAND_RED, fontSize: 14 }}>
+                <span>{i + 1}. {t.sectionTitle}</span>
+                <span>{Math.round(t.accuracy * 100)}% de acierto</span>
+              </div>
+              <p style={{ margin: "6px 0 0", fontSize: 14, color: "#334" }}>{t.tip}</p>
+            </div>
+          ))
+        )}
+      </Card>
+
+      <Card title="5. Respuestas recientes">
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
           <thead>
             <tr style={{ textAlign: "left", color: "#667" }}>
@@ -220,10 +182,19 @@ export default function Dashboard() {
   );
 }
 
+function groupByDept(rows: DeptSectionStat[]) {
+  const map: Record<string, DeptSectionStat[]> = {};
+  for (const row of rows) {
+    if (!map[row.department]) map[row.department] = [];
+    map[row.department].push(row);
+  }
+  return map;
+}
+
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ background: "white", borderRadius: 12, padding: 24, marginTop: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
-      <h3 style={{ marginTop: 0, color: BRAND_BLACK }}>{title}</h3>
+      <h3 style={{ marginTop: 0, color: BRAND_BLACK, fontWeight: 400 }}>{title}</h3>
       {children}
     </div>
   );
@@ -233,9 +204,9 @@ function BarRow({ label, pct, bold, small }: { label: string; pct: number; bold?
   const color = pct >= 80 ? GOOD : pct >= 60 ? MID : BAD;
   return (
     <div style={{ marginBottom: small ? 6 : 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: small ? 12 : 13, marginBottom: 4, fontWeight: bold ? 700 : 400, color: bold ? "#223" : "#445" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: small ? 12 : 13, marginBottom: 4, fontWeight: bold ? 400 : 300, color: bold ? "#223" : "#445" }}>
         <span>{label}</span>
-        <span style={{ fontWeight: 600 }}>{pct}%</span>
+        <span style={{ fontWeight: 400 }}>{pct}%</span>
       </div>
       <div style={{ background: "#eee", borderRadius: 6, height: small ? 6 : 10 }}>
         <div style={{ width: `${pct}%`, background: color, height: "100%", borderRadius: 6 }} />
@@ -263,7 +234,7 @@ function RankTable({ rows, highlight }: { rows: PersonStat[]; highlight: "green"
             <td style={{ padding: 6 }}>{i + 1}</td>
             <td style={{ padding: 6 }}>{p.employee_name}</td>
             <td style={{ padding: 6 }}>{p.department}</td>
-            <td style={{ padding: 6, fontWeight: 700, color }}>{Math.round((p.avg_ratio || 0) * 100)}%</td>
+            <td style={{ padding: 6, fontWeight: 400, color }}>{Math.round((p.avg_ratio || 0) * 100)}%</td>
           </tr>
         ))}
       </tbody>
