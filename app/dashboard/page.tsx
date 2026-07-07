@@ -73,6 +73,40 @@ export default function Dashboard() {
     }
   }
 
+  async function downloadPdf() {
+    if (!data) return;
+    const { jsPDF } = await import("jspdf");
+    const autoTable = (await import("jspdf-autotable")).default;
+
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text("Cuestionario de Procesos — Truly Nolen", 14, 18);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generado: ${new Date().toLocaleString("es-SV")}`, 14, 24);
+    doc.text(
+      `${data.overall.total_submissions} cuestionarios respondidos · promedio general ${Math.round((data.overall.avg_ratio || 0) * 100)}%`,
+      14,
+      30
+    );
+
+    autoTable(doc, {
+      startY: 38,
+      head: [["Empleado", "Departamento", "Nota", "%", "Fecha"]],
+      body: data.allSubmissions.map((r) => [
+        r.employee_name,
+        r.department,
+        `${r.score}/${r.total}`,
+        `${Math.round((r.score / r.total) * 100)}%`,
+        new Date(r.created_at).toLocaleString("es-SV"),
+      ]),
+      headStyles: { fillColor: [255, 0, 0] },
+      styles: { fontSize: 9 },
+    });
+
+    doc.save(`respuestas-cuestionario-${new Date().toISOString().slice(0, 10)}.pdf`);
+  }
+
   if (!data) {
     return (
       <div style={{ maxWidth: 420, margin: "80px auto", padding: 20 }}>
@@ -102,10 +136,13 @@ export default function Dashboard() {
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "40px 20px 80px" }}>
       <img src="/logo.jpg" alt="Truly Nolen" style={{ height: 100, display: "block", marginBottom: 16 }} />
       <h1 style={{ color: BRAND_BLACK, fontWeight: 700 }}>Panel de resultados — dónde reforzar</h1>
-      <p style={{ color: "#556" }}>
-        {data.overall.total_submissions} cuestionarios respondidos · promedio general{" "}
-        {Math.round((data.overall.avg_ratio || 0) * 100)}%
-      </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+        <p style={{ color: "#556", margin: 0 }}>
+          {data.overall.total_submissions} cuestionarios respondidos · promedio general{" "}
+          {Math.round((data.overall.avg_ratio || 0) * 100)}%
+        </p>
+        <button onClick={downloadPdf} style={pdfBtnStyle}>⬇ Descargar respuestas (PDF)</button>
+      </div>
 
       <Card title="1. Preguntas con más errores">
         {data.weakestQuestions.length === 0 ? (
@@ -125,7 +162,9 @@ export default function Dashboard() {
                 <tr key={q.question_id} style={{ borderTop: "1px solid #eee" }}>
                   <td style={{ padding: 6 }}>{q.question_id}</td>
                   <td style={{ padding: 6 }}>{q.section_title}</td>
-                  <td style={{ padding: 6 }}>{Math.round((q.correct_answers / q.total_answers) * 100)}%</td>
+                  <td style={{ padding: 6 }}>
+                    {Math.round((q.correct_answers / q.total_answers) * 100)}% ({q.correct_answers}/{q.total_answers})
+                  </td>
                   <td style={{ padding: 6, color: BRAND_RED }}>
                     {q.weakest_department
                       ? `${q.weakest_department} (${Math.round((q.weakest_department_ratio || 0) * 100)}%)`
@@ -140,7 +179,12 @@ export default function Dashboard() {
 
       <Card title="2. Ranking por departamento">
         <VerticalBarChart
-          bars={data.byDepartment.map((d) => ({ label: d.department, pct: Math.round((d.avg_ratio || 0) * 100), sub: `${d.submissions} resp.` }))}
+          bars={data.byDepartment.map((d) => ({
+            label: d.department,
+            pct: Math.round((d.avg_ratio || 0) * 100),
+            sub: `${d.submissions} resp.`,
+            color: deptColor(d.department),
+          }))}
         />
         <p style={{ fontSize: 13, color: "#667", marginTop: 20, marginBottom: 8 }}>Procesos más débiles por departamento:</p>
         {Object.entries(groupByDept(data.byDepartmentSection)).map(([dep, rows]) => (
@@ -346,22 +390,37 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   );
 }
 
-function VerticalBarChart({ bars, small }: { bars: { label: string; pct: number; sub?: string }[]; small?: boolean }) {
-  const height = small ? 80 : 140;
+const DEPARTMENT_COLORS: Record<string, string> = {
+  "Planificación": "#1F4E9C",
+  "Operaciones": "#2E9E4F",
+  "Coordinación": "#F5821F",
+  "Facturación / Admin": "#E53935",
+  "Campo": "#757575",
+  "Ventas / Contratos": "#C2185B",
+};
+function deptColor(name: string) {
+  return DEPARTMENT_COLORS[name] || "#555555";
+}
+
+function VerticalBarChart({ bars, small }: { bars: { label: string; pct: number; sub?: string; color?: string }[]; small?: boolean }) {
+  const trackHeight = small ? 80 : 140;
+  const colWidth = small ? 72 : 92;
   return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 16, height: height + 50, overflowX: "auto", paddingTop: 8 }}>
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 16, overflowX: "auto", paddingTop: 24 }}>
       {bars.map((b) => {
-        const color = b.pct >= 80 ? GOOD : b.pct >= 60 ? MID : BAD;
+        const color = b.color || (b.pct >= 80 ? GOOD : b.pct >= 60 ? MID : BAD);
         return (
-          <div key={b.label} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: small ? 60 : 80 }}>
-            <span style={{ fontSize: small ? 11 : 13, fontWeight: 700, marginBottom: 4 }}>{b.pct}%</span>
-            <div style={{ width: small ? 28 : 40, height, display: "flex", alignItems: "flex-end", background: "#f0f0f0", borderRadius: 4 }}>
-              <div style={{ width: "100%", height: `${b.pct}%`, background: color, borderRadius: 4 }} />
+          <div key={b.label} style={{ width: colWidth, flexShrink: 0 }}>
+            <div style={{ position: "relative", height: trackHeight, width: small ? 28 : 40, margin: "0 auto", background: "#f0f0f0", borderRadius: 4 }}>
+              <span style={{ position: "absolute", top: -22, left: -30, right: -30, textAlign: "center", fontSize: small ? 11 : 13, fontWeight: 700 }}>
+                {b.pct}%
+              </span>
+              <div style={{ position: "absolute", bottom: 0, left: 0, width: "100%", height: `${b.pct}%`, background: color, borderRadius: 4 }} />
             </div>
-            <span style={{ fontSize: small ? 10 : 12, textAlign: "center", marginTop: 6, maxWidth: small ? 70 : 90, color: "#445" }}>
+            <div style={{ minHeight: small ? 28 : 32, marginTop: 8, fontSize: small ? 10 : 12, textAlign: "center", color: "#445", lineHeight: 1.3 }}>
               {b.label}
-            </span>
-            {b.sub && <span style={{ fontSize: 10, color: "#889" }}>{b.sub}</span>}
+            </div>
+            {b.sub && <div style={{ fontSize: 10, color: "#889", textAlign: "center" }}>{b.sub}</div>}
           </div>
         );
       })}
@@ -396,6 +455,7 @@ function RankTable({ rows, highlight }: { rows: PersonStat[]; highlight: "green"
   );
 }
 
+const pdfBtnStyle: React.CSSProperties = { background: BRAND_BLACK, color: "white", border: "none", borderRadius: 8, padding: "10px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" };
 const tipBox: React.CSSProperties = { background: "#fffbe8", border: `1px solid ${BRAND_YELLOW}`, borderRadius: 8, padding: 14, marginBottom: 10 };
 const badgeStyle: React.CSSProperties = { position: "absolute", top: 16, right: 16, fontSize: 26 };
 const deleteBtnStyle: React.CSSProperties = { background: "white", color: BRAND_RED, border: `1px solid ${BRAND_RED}`, borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontWeight: 700 };
