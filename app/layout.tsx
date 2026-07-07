@@ -1,6 +1,7 @@
 export const metadata = {
   title: "Cuestionario de Procesos — Truly Nolen",
   description: "Evaluación de conocimiento del Manual de Procesos",
+  icons: { icon: "/logo.jpg" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
