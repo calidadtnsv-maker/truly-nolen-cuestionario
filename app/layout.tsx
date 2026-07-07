@@ -11,7 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap"
           rel="stylesheet"
         />
       </head>
@@ -19,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         style={{
           margin: 0,
           fontFamily: "'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif",
-          fontWeight: 300,
+          fontWeight: 400,
           background: "#f4f4f4",
           color: "#111",
         }}

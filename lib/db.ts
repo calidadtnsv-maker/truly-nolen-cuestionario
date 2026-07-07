@@ -27,5 +27,8 @@ export async function ensureSchema() {
     );
   `;
 
+  // Guarda la respuesta real de la persona (para poder ver el detalle de su evaluación)
+  await sql`ALTER TABLE answers ADD COLUMN IF NOT EXISTS answer_data JSONB;`;
+
   initialized = true;
 }

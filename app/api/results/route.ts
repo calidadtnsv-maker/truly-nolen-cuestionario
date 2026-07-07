@@ -20,13 +20,14 @@ export async function GET(req: Request) {
     FROM submissions;
   `;
 
-  // 1. Preguntas con más errores + departamento que más falla en cada una
+  // 1. Preguntas con más errores (excluye las que están al 100%) + departamento que más falla
   const weakestQuestions = await sql`
     SELECT question_id, section_title,
            COUNT(*)::int AS total_answers,
            SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::int AS correct_answers
     FROM answers
     GROUP BY question_id, section_title
+    HAVING SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::float / COUNT(*) < 1
     ORDER BY (SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::float / COUNT(*)) ASC
     LIMIT 10;
   `;
@@ -90,13 +91,14 @@ export async function GET(req: Request) {
   const topPerformers = personRows.slice(0, 10);
   const bottomPerformers = [...personRows].slice(-10).reverse();
 
-  // 4. Top 10 de consejos de reentrenamiento (procesos más débiles con su tip)
+  // 4. Top 10 de consejos de reentrenamiento (excluye procesos al 100%)
   const bySection = await sql`
     SELECT section_id, section_title,
            COUNT(*)::int AS total_answers,
            SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::int AS correct_answers
     FROM answers
     GROUP BY section_id, section_title
+    HAVING SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::float / COUNT(*) < 1
     ORDER BY (SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::float / COUNT(*)) ASC
     LIMIT 10;
   `;
@@ -109,12 +111,20 @@ export async function GET(req: Request) {
     tip: tipsBySection[s.section_id] || "Repasar este proceso en el manual.",
   }));
 
-  // 5. Respuestas recientes
+  // 5. Respuestas recientes (con id para poder borrar)
   const recent = await sql`
-    SELECT employee_name, department, score, total, created_at
+    SELECT id, employee_name, department, score, total, created_at
     FROM submissions
     ORDER BY created_at DESC
     LIMIT 25;
+  `;
+
+  // 6. Todas las evaluaciones por usuario (para ver el detalle de cada una)
+  const allSubmissions = await sql`
+    SELECT id, employee_name, department, score, total, created_at
+    FROM submissions
+    ORDER BY employee_name ASC, created_at DESC
+    LIMIT 500;
   `;
 
   return NextResponse.json({
@@ -126,5 +136,6 @@ export async function GET(req: Request) {
     bottomPerformers,
     reinforcementRanking,
     recent,
+    allSubmissions,
   });
 }

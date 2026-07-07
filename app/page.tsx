@@ -127,7 +127,7 @@ export default function Home() {
     return (
       <Shell>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ color: BRAND_RED, fontWeight: 400, fontSize: 13, textTransform: "uppercase", letterSpacing: 0.5 }}>
+          <span style={{ color: BRAND_RED, fontWeight: 700, fontSize: 13, textTransform: "uppercase", letterSpacing: 0.5 }}>
             {q.sectionTitle}
           </span>
           <span style={{ color: "#667", fontSize: 13 }}>
@@ -137,7 +137,7 @@ export default function Home() {
         <ProgressBar current={qIndex + 1} total={ALL_QUESTIONS.length} />
 
         <div style={questionCard}>
-          <p style={{ fontWeight: 400, fontSize: 17, marginTop: 0 }}>{q.text}</p>
+          <p style={{ fontWeight: 700, fontSize: 17, marginTop: 0 }}>{q.text}</p>
 
           {q.type === "mc" && (
             <div>
@@ -211,7 +211,7 @@ export default function Home() {
           <h3 style={{ color: BRAND_BLACK, marginBottom: 10 }}>Temas que te conviene reforzar</h3>
           {result.reinforce.map((r) => (
             <div key={r.sectionId} style={tipBox}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 400, fontSize: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 14 }}>
                 <span>{r.sectionTitle}</span>
                 <span style={{ color: BRAND_RED }}>{r.correct}/{r.total} correctas</span>
               </div>
@@ -220,7 +220,7 @@ export default function Home() {
           ))}
         </div>
       ) : (
-        <p style={{ marginTop: 24, color: "#227722", fontWeight: 400 }}>
+        <p style={{ marginTop: 24, color: "#227722", fontWeight: 700 }}>
           ¡Respondiste todo correctamente! No hay temas pendientes de reforzar.
         </p>
       )}
@@ -282,8 +282,8 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 const labelStyle: React.CSSProperties = { display: "block", marginTop: 16, marginBottom: 6, fontSize: 14, fontWeight: 400, color: "#334" };
 const inputStyle: React.CSSProperties = { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cdcdcd", fontSize: 15, boxSizing: "border-box" };
-const buttonStyle: React.CSSProperties = { marginTop: 24, background: BRAND_RED, color: "white", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 15, fontWeight: 400, cursor: "pointer" };
-const secondaryButtonStyle: React.CSSProperties = { marginTop: 24, background: "white", color: BRAND_BLACK, border: `1px solid ${BRAND_BLACK}`, borderRadius: 8, padding: "12px 24px", fontSize: 15, fontWeight: 400, cursor: "pointer" };
+const buttonStyle: React.CSSProperties = { marginTop: 24, background: BRAND_RED, color: "white", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 15, fontWeight: 700, cursor: "pointer" };
+const secondaryButtonStyle: React.CSSProperties = { marginTop: 24, background: "white", color: BRAND_BLACK, border: `1px solid ${BRAND_BLACK}`, borderRadius: 8, padding: "12px 24px", fontSize: 15, fontWeight: 700, cursor: "pointer" };
 const questionCard: React.CSSProperties = { background: "#fafafa", border: "1px solid #eee", borderRadius: 10, padding: 20, marginTop: 8 };
 const optionLabel: React.CSSProperties = { display: "block", padding: "10px 12px", fontSize: 14, cursor: "pointer", borderRadius: 8, marginBottom: 8 };
 const orderRow: React.CSSProperties = { display: "flex", alignItems: "center", gap: 10, background: "white", border: "1px solid #eee", borderRadius: 8, padding: "10px 12px", marginBottom: 8, fontSize: 14 };

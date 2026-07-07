@@ -67,8 +67,8 @@ export async function POST(req: Request) {
 
     for (const g of graded) {
       await sql`
-        INSERT INTO answers (submission_id, question_id, section_id, section_title, is_correct)
-        VALUES (${submissionId}, ${g.questionId}, ${g.sectionId}, ${g.sectionTitle}, ${g.isCorrect});
+        INSERT INTO answers (submission_id, question_id, section_id, section_title, is_correct, answer_data)
+        VALUES (${submissionId}, ${g.questionId}, ${g.sectionId}, ${g.sectionTitle}, ${g.isCorrect}, ${JSON.stringify(responses[g.questionId] ?? null)});
       `;
     }
 
