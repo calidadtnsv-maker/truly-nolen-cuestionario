@@ -32,8 +32,11 @@ export async function GET(req: Request) {
     ORDER BY id ASC;
   `;
 
-  return NextResponse.json({
-    submission: (subRows as any[])[0],
-    answers,
-  });
+  return NextResponse.json(
+    {
+      submission: (subRows as any[])[0],
+      answers,
+    },
+    { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+  );
 }

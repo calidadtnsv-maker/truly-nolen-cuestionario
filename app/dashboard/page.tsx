@@ -47,7 +47,7 @@ export default function Dashboard() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/results?password=${encodeURIComponent(password)}`);
+      const res = await fetch(`/api/results?password=${encodeURIComponent(password)}`, { cache: "no-store" });
       if (!res.ok) throw new Error("No autorizado");
       const json = await res.json();
       setData(json);
@@ -141,7 +141,10 @@ export default function Dashboard() {
           {data.overall.total_submissions} cuestionarios respondidos · promedio general{" "}
           {Math.round((data.overall.avg_ratio || 0) * 100)}%
         </p>
-        <button onClick={downloadPdf} style={pdfBtnStyle}>⬇ Descargar respuestas (PDF)</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={load} style={refreshBtnStyle}>🔄 Actualizar</button>
+          <button onClick={downloadPdf} style={pdfBtnStyle}>⬇ Descargar respuestas (PDF)</button>
+        </div>
       </div>
 
       <Card title="1. Preguntas con más errores">
@@ -455,6 +458,7 @@ function RankTable({ rows, highlight }: { rows: PersonStat[]; highlight: "green"
   );
 }
 
+const refreshBtnStyle: React.CSSProperties = { background: "white", color: BRAND_BLACK, border: `1px solid ${BRAND_BLACK}`, borderRadius: 8, padding: "10px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" };
 const pdfBtnStyle: React.CSSProperties = { background: BRAND_BLACK, color: "white", border: "none", borderRadius: 8, padding: "10px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" };
 const tipBox: React.CSSProperties = { background: "#fffbe8", border: `1px solid ${BRAND_YELLOW}`, borderRadius: 8, padding: 14, marginBottom: 10 };
 const badgeStyle: React.CSSProperties = { position: "absolute", top: 16, right: 16, fontSize: 26 };

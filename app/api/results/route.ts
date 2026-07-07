@@ -127,15 +127,18 @@ export async function GET(req: Request) {
     LIMIT 500;
   `;
 
-  return NextResponse.json({
-    overall: (overall as any[])[0],
-    weakestQuestions: weakestQuestionsWithDept,
-    byDepartment,
-    byDepartmentSection,
-    topPerformers,
-    bottomPerformers,
-    reinforcementRanking,
-    recent,
-    allSubmissions,
-  });
+  return NextResponse.json(
+    {
+      overall: (overall as any[])[0],
+      weakestQuestions: weakestQuestionsWithDept,
+      byDepartment,
+      byDepartmentSection,
+      topPerformers,
+      bottomPerformers,
+      reinforcementRanking,
+      recent,
+      allSubmissions,
+    },
+    { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+  );
 }
