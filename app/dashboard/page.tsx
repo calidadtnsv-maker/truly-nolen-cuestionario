@@ -214,6 +214,16 @@ export default function Dashboard() {
         body: JSON.stringify({ id, password }),
       });
       if (!res.ok) throw new Error("No se pudo borrar");
+      // Quitarla de la vista de inmediato, sin esperar la recarga
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              recent: prev.recent.filter((r) => r.id !== id),
+              allSubmissions: prev.allSubmissions.filter((r) => r.id !== id),
+            }
+          : prev
+      );
       load();
     } catch {
       alert("No se pudo borrar la respuesta.");
@@ -222,6 +232,7 @@ export default function Dashboard() {
 
   async function fetchSubmissionDetail(id: number) {
     const res = await fetch(`/api/submission?id=${id}&password=${encodeURIComponent(password)}&t=${Date.now()}`, { cache: "no-store" });
+    if (res.status === 404) return null;
     if (!res.ok) throw new Error("error");
     return res.json();
   }
@@ -230,6 +241,10 @@ export default function Dashboard() {
     setDownloadingId(row.id);
     try {
       const detail = await fetchSubmissionDetail(row.id);
+      if (!detail || !detail.submission || !Array.isArray(detail.answers)) {
+        alert("Esta evaluación ya no existe — probablemente fue borrada. Dale a Actualizar para refrescar el listado.");
+        return;
+      }
       await generateEvaluationPdf(detail);
     } catch {
       alert("No se pudo generar el PDF de esta evaluación.");
@@ -490,15 +505,25 @@ export default function Dashboard() {
 function SubmissionDetailModal({ id, password, onClose }: { id: number; password: string; onClose: () => void }) {
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     fetch(`/api/submission?id=${id}&password=${encodeURIComponent(password)}&t=${Date.now()}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((json) => {
-        setDetail(json);
+        // Si la evaluación ya no existe (fue borrada), no la tratamos como detalle válido
+        if (json && json.submission && Array.isArray(json.answers)) {
+          setDetail(json);
+        } else {
+          setDetail(null);
+          setNotFound(true);
+        }
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        setNotFound(true);
+        setLoading(false);
+      });
   }, [id, password]);
 
   const reinforce = detail ? buildUserReinforcement(detail.answers) : [];
@@ -519,6 +544,11 @@ function SubmissionDetailModal({ id, password, onClose }: { id: number; password
           </div>
         </div>
         {loading && <p>Cargando evaluación...</p>}
+        {!loading && notFound && (
+          <p style={{ color: "#556" }}>
+            Esta evaluación ya no existe — probablemente fue borrada. Dale a "🔄 Actualizar" en el panel para refrescar el listado.
+          </p>
+        )}
         {detail && (
           <>
             <p style={{ fontSize: 14, color: "#556", marginTop: 0 }}>
