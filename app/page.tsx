@@ -231,20 +231,55 @@ export default function Home() {
 }
 
 function OrderQuestionUI({ steps, draft, onChange }: { steps: string[]; draft: number[]; onChange: (d: number[]) => void }) {
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+
   function move(from: number, to: number) {
-    if (to < 0 || to >= draft.length) return;
+    if (to < 0 || to >= draft.length || from === to) return;
     const copy = [...draft];
     const [item] = copy.splice(from, 1);
     copy.splice(to, 0, item);
     onChange(copy);
   }
+
   return (
     <div>
       <p style={{ fontSize: 13, color: "#667", marginTop: -4 }}>
-        Usa las flechas para poner los pasos en el orden correcto (de arriba hacia abajo).
+        Arrastra los pasos (o usa las flechas) para ponerlos en el orden correcto, de arriba hacia abajo.
       </p>
       {draft.map((stepIdx, pos) => (
-        <div key={stepIdx} style={orderRow}>
+        <div
+          key={stepIdx}
+          draggable
+          onDragStart={(e) => {
+            setDragIndex(pos);
+            e.dataTransfer.effectAllowed = "move";
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            if (overIndex !== pos) setOverIndex(pos);
+          }}
+          onDragLeave={() => setOverIndex((v) => (v === pos ? null : v))}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (dragIndex !== null) move(dragIndex, pos);
+            setDragIndex(null);
+            setOverIndex(null);
+          }}
+          onDragEnd={() => {
+            setDragIndex(null);
+            setOverIndex(null);
+          }}
+          style={{
+            ...orderRow,
+            cursor: "grab",
+            opacity: dragIndex === pos ? 0.4 : 1,
+            border: overIndex === pos && dragIndex !== null && dragIndex !== pos ? `2px dashed ${BRAND_RED}` : orderRow.border as string,
+            userSelect: "none",
+          }}
+        >
+          <span style={{ color: "#bbb", fontSize: 16, cursor: "grab", flexShrink: 0 }}>⠿</span>
           <span style={orderNum}>{pos + 1}</span>
           <span style={{ flex: 1 }}>{steps[stepIdx]}</span>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -267,7 +302,7 @@ function ProgressBar({ current, total }: { current: number; total: number }) {
 
 function Logo() {
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src="/logo.jpg" alt="Truly Nolen" style={{ height: 140, display: "block" }} />;
+  return <img src="/logo.png" alt="Truly Nolen" style={{ height: 140, display: "block" }} />;
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
