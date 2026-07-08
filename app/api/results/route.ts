@@ -4,6 +4,8 @@ import { ensureSchema } from "@/lib/db";
 import { SECTIONS } from "@/lib/questions";
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -124,11 +126,23 @@ export async function GET(req: Request) {
     tip: tipsBySection[s.section_id] || "Repasar este proceso en el manual.",
   }));
 
-  const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
+  const connectionString =
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.DATABASE_URL_UNPOOLED ||
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    "";
   let dbDiagnostic = "sin variable de conexión";
   try {
     const u = new URL(connectionString);
-    dbDiagnostic = `host=${u.hostname} db=${u.pathname.replace("/", "")} varUsada=${process.env.DATABASE_URL ? "DATABASE_URL" : "POSTGRES_URL"}`;
+    const varUsada = process.env.POSTGRES_URL_NON_POOLING
+      ? "POSTGRES_URL_NON_POOLING"
+      : process.env.DATABASE_URL_UNPOOLED
+      ? "DATABASE_URL_UNPOOLED"
+      : process.env.DATABASE_URL
+      ? "DATABASE_URL"
+      : "POSTGRES_URL";
+    dbDiagnostic = `host=${u.hostname} db=${u.pathname.replace("/", "")} varUsada=${varUsada}`;
   } catch {
     dbDiagnostic = "no se pudo parsear la connection string";
   }
