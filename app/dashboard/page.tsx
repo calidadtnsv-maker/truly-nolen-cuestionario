@@ -188,6 +188,7 @@ export default function Dashboard() {
   const [viewingId, setViewingId] = useState<number | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   async function load() {
     setLoading(true);
@@ -207,6 +208,7 @@ export default function Dashboard() {
 
   async function deleteSubmission(id: number) {
     if (!confirm("¿Borrar esta respuesta? Esta acción no se puede deshacer.")) return;
+    setDeletingId(id);
     try {
       const res = await fetch("/api/delete-submission", {
         method: "POST",
@@ -224,9 +226,11 @@ export default function Dashboard() {
             }
           : prev
       );
-      load();
+      await load();
     } catch {
       alert("No se pudo borrar la respuesta.");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -457,7 +461,9 @@ export default function Dashboard() {
                 <td style={tdStyle}>{r.score}/{r.total}</td>
                 <td style={tdStyle}>{new Date(r.created_at).toLocaleString("es-SV")}</td>
                 <td style={tdStyle}>
-                  <button onClick={() => deleteSubmission(r.id)} style={deleteBtnStyle}>Borrar</button>
+                  <button onClick={() => deleteSubmission(r.id)} disabled={deletingId === r.id} style={deleteBtnStyle}>
+                    {deletingId === r.id ? "Borrando..." : "Borrar"}
+                  </button>
                 </td>
               </tr>
             ))}
@@ -534,7 +540,11 @@ function SubmissionDetailModal({ id, password, onClose }: { id: number; password
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <h3 style={{ margin: 0, fontWeight: 700, color: BRAND_BLACK }}>
-            {detail ? `${detail.submission.employee_name} — ${detail.submission.department}` : "Cargando..."}
+            {detail
+              ? `${detail.submission.employee_name} — ${detail.submission.department}`
+              : notFound
+              ? "Evaluación no encontrada"
+              : "Cargando..."}
           </h3>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {detail && (
