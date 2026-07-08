@@ -5,7 +5,7 @@ import { neon, NeonQueryFunction } from "@neondatabase/serverless";
 // Initialized lazily so `next build` doesn't fail before that env var exists.
 let client: NeonQueryFunction<false, false> | null = null;
 
-function getClient() {
+export function getClient() {
   if (!client) {
     const connectionString =
       process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
