@@ -72,6 +72,114 @@ function buildUserReinforcement(answers: any[]) {
     }));
 }
 
+// PDF individual con formato fluido (espejo del modal): sin tablas que se desborden.
+function pdfSafe(s: string) {
+  // La fuente interna del PDF no soporta flechas ni algunos símbolos: los convertimos.
+  return s
+    .replace(/→/g, "->")
+    .replace(/·/g, "-")
+    .replace(/—/g, "-")
+    .replace(/[⭐😞✅❌📚⠿]/g, "");
+}
+
+async function generateEvaluationPdf(detail: any) {
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF();
+  const pageH = doc.internal.pageSize.getHeight();
+  const marginX = 14;
+  const maxW = 180;
+  let y = 18;
+
+  function ensureSpace(needed: number) {
+    if (y + needed > pageH - 15) {
+      doc.addPage();
+      y = 18;
+    }
+  }
+  function writeWrapped(text: string, size: number, opts: { bold?: boolean; color?: [number, number, number]; indent?: number } = {}) {
+    doc.setFontSize(size);
+    doc.setFont("helvetica", opts.bold ? "bold" : "normal");
+    doc.setTextColor(...(opts.color || [17, 17, 17]));
+    const lines = doc.splitTextToSize(pdfSafe(text), maxW - (opts.indent || 0));
+    const lineH = size * 0.45;
+    for (const line of lines) {
+      ensureSpace(lineH + 2);
+      doc.text(line, marginX + (opts.indent || 0), y);
+      y += lineH + 1.5;
+    }
+  }
+
+  const sub = detail.submission;
+  writeWrapped("Evaluación individual - Cuestionario de Procesos", 15, { bold: true });
+  y += 1;
+  writeWrapped(`${sub.employee_name} - ${sub.department}`, 12, { bold: true });
+  writeWrapped(
+    `Nota: ${sub.score}/${sub.total} (${Math.round((sub.score / sub.total) * 100)}%) - ${new Date(sub.created_at).toLocaleString("es-SV")}`,
+    10,
+    { color: [90, 90, 90] }
+  );
+  y += 4;
+
+  // Puntos de mejora
+  const reinforce = buildUserReinforcement(detail.answers);
+  writeWrapped("Puntos de mejora recomendados", 13, { bold: true });
+  y += 1;
+  if (reinforce.length === 0) {
+    writeWrapped("Respondió todo correctamente - sin puntos de mejora.", 10, { color: [27, 122, 61], bold: true });
+  } else {
+    for (const r of reinforce) {
+      writeWrapped(`${r.sectionTitle} (${r.correct}/${r.total} correctas)`, 11, { bold: true, color: [227, 6, 19] });
+      writeWrapped(r.tip, 10, { indent: 4 });
+      y += 2;
+    }
+  }
+  y += 4;
+
+  // Preguntas: falladas primero
+  const sorted = detail.answers.slice().sort((a: any, b: any) => Number(a.is_correct) - Number(b.is_correct));
+  const failedCount = sorted.filter((a: any) => !a.is_correct).length;
+  writeWrapped(`Detalle de respuestas (${failedCount} falladas de ${detail.answers.length})`, 13, { bold: true });
+  y += 2;
+
+  for (const a of sorted) {
+    const q: any = ALL_QUESTIONS.find((qq) => qq.id === a.question_id);
+    if (!q) continue;
+    const answerData = typeof a.answer_data === "string" ? JSON.parse(a.answer_data) : a.answer_data;
+
+    ensureSpace(14);
+    writeWrapped(`${a.is_correct ? "[CORRECTA]" : "[FALLADA]"} ${q.text}`, 11, {
+      bold: true,
+      color: a.is_correct ? [27, 122, 61] : [227, 6, 19],
+    });
+
+    if (q.type === "mc") {
+      const given = answerData && answerData.selectedIndex != null ? q.options[answerData.selectedIndex] : "Sin respuesta";
+      writeWrapped(`Su respuesta: ${given}`, 10, { indent: 4 });
+      if (!a.is_correct) {
+        writeWrapped(`Respuesta correcta: ${q.options[q.correctIndex]}`, 10, { indent: 4, color: [27, 122, 61] });
+      }
+    } else {
+      if (answerData && answerData.order) {
+        writeWrapped("Su orden:", 10, { indent: 4, bold: true });
+        answerData.order.forEach((stepIdx: number, i: number) => {
+          writeWrapped(`${i + 1}. ${q.steps[stepIdx]}`, 10, { indent: 8 });
+        });
+      } else {
+        writeWrapped("Su orden: sin respuesta", 10, { indent: 4 });
+      }
+      if (!a.is_correct) {
+        writeWrapped("Orden correcto:", 10, { indent: 4, bold: true, color: [27, 122, 61] });
+        q.steps.forEach((step: string, i: number) => {
+          writeWrapped(`${i + 1}. ${step}`, 10, { indent: 8, color: [27, 122, 61] });
+        });
+      }
+    }
+    y += 3;
+  }
+
+  doc.save(`evaluacion-${sub.employee_name.replace(/\s+/g, "-")}-${sub.id}.pdf`);
+}
+
 export default function Dashboard() {
   const [password, setPassword] = useState("");
   const [data, setData] = useState<Results | null>(null);
@@ -122,72 +230,7 @@ export default function Dashboard() {
     setDownloadingId(row.id);
     try {
       const detail = await fetchSubmissionDetail(row.id);
-      const { jsPDF } = await import("jspdf");
-      const autoTable = (await import("jspdf-autotable")).default;
-
-      const doc = new jsPDF();
-      doc.setFontSize(15);
-      doc.setTextColor(0);
-      doc.text("Evaluación individual — Cuestionario de Procesos", 14, 16);
-      doc.setFontSize(11);
-      doc.text(`${row.employee_name} · ${row.department}`, 14, 24);
-      doc.setFontSize(10);
-      doc.setTextColor(90);
-      doc.text(
-        `Nota: ${row.score}/${row.total} (${Math.round((row.score / row.total) * 100)}%) · ${new Date(row.created_at).toLocaleString("es-SV")}`,
-        14,
-        30
-      );
-
-      // Tabla de respuestas
-      const body = detail.answers.map((a: any) => {
-        const q: any = ALL_QUESTIONS.find((qq) => qq.id === a.question_id);
-        if (!q) return [a.question_id, "", a.is_correct ? "Correcta" : "Incorrecta", ""];
-        const answerData = typeof a.answer_data === "string" ? JSON.parse(a.answer_data) : a.answer_data;
-        let given = "—";
-        let correct = "";
-        if (q.type === "mc") {
-          given = answerData && answerData.selectedIndex != null ? q.options[answerData.selectedIndex] : "Sin respuesta";
-          correct = q.options[q.correctIndex];
-        } else {
-          given = answerData && answerData.order ? answerData.order.map((i: number, n: number) => `${n + 1}. ${q.steps[i]}`).join("  ") : "Sin respuesta";
-          correct = q.steps.map((s: string, n: number) => `${n + 1}. ${s}`).join("  ");
-        }
-        return [q.text, given, a.is_correct ? "✓" : "✗", a.is_correct ? "" : correct];
-      });
-
-      autoTable(doc, {
-        startY: 36,
-        head: [["Pregunta", "Su respuesta", "", "Respuesta correcta (si falló)"]],
-        body,
-        headStyles: { fillColor: [227, 6, 19] },
-        styles: { fontSize: 8, cellPadding: 2 },
-        columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 55 }, 2: { cellWidth: 8 }, 3: { cellWidth: 55 } },
-      });
-
-      // Puntos de mejora
-      const reinforce = buildUserReinforcement(detail.answers);
-      const afterTableY = (doc as any).lastAutoTable.finalY + 10;
-      doc.setFontSize(13);
-      doc.setTextColor(0);
-      doc.text("Puntos de mejora recomendados", 14, afterTableY);
-
-      if (reinforce.length === 0) {
-        doc.setFontSize(10);
-        doc.setTextColor(27, 122, 61);
-        doc.text("Sin puntos de mejora: respondió todo correctamente.", 14, afterTableY + 8);
-      } else {
-        autoTable(doc, {
-          startY: afterTableY + 4,
-          head: [["Tema", "Resultado", "Recomendación de refuerzo"]],
-          body: reinforce.map((r) => [r.sectionTitle, `${r.correct}/${r.total}`, r.tip]),
-          headStyles: { fillColor: [255, 214, 43], textColor: [0, 0, 0] },
-          styles: { fontSize: 9, cellPadding: 3 },
-          columnStyles: { 0: { cellWidth: 50 }, 1: { cellWidth: 20 }, 2: { cellWidth: 110 } },
-        });
-      }
-
-      doc.save(`evaluacion-${row.employee_name.replace(/\s+/g, "-")}-${row.id}.pdf`);
+      await generateEvaluationPdf(detail);
     } catch {
       alert("No se pudo generar el PDF de esta evaluación.");
     } finally {
@@ -202,31 +245,50 @@ export default function Dashboard() {
 
     const doc = new jsPDF();
     doc.setFontSize(16);
-    doc.text("Cuestionario de Procesos — Truly Nolen", 14, 18);
+    doc.text("Cuestionario de Procesos - Truly Nolen", 14, 18);
     doc.setFontSize(10);
     doc.setTextColor(100);
     doc.text(`Generado: ${new Date().toLocaleString("es-SV")}`, 14, 24);
     doc.text(
-      `${data.overall.total_submissions} cuestionarios respondidos · promedio general ${Math.round((data.overall.avg_ratio || 0) * 100)}%`,
+      `${data.overall.total_submissions} cuestionarios respondidos - promedio general ${Math.round((data.overall.avg_ratio || 0) * 100)}%`,
       14,
       30
     );
 
-    autoTable(doc, {
-      startY: 38,
-      head: [["Empleado", "Departamento", "Nota", "%", "Fecha"]],
-      body: data.allSubmissions.map((r) => [
-        r.employee_name,
-        r.department,
-        `${r.score}/${r.total}`,
-        `${Math.round((r.score / r.total) * 100)}%`,
-        new Date(r.created_at).toLocaleString("es-SV"),
-      ]),
-      headStyles: { fillColor: [227, 6, 19] },
-      styles: { fontSize: 9 },
-    });
+    // Agrupar evaluaciones por departamento
+    const byDept: Record<string, SubmissionRow[]> = {};
+    for (const r of data.allSubmissions) {
+      if (!byDept[r.department]) byDept[r.department] = [];
+      byDept[r.department].push(r);
+    }
 
-    doc.save(`respuestas-cuestionario-${new Date().toISOString().slice(0, 10)}.pdf`);
+    let y = 38;
+    for (const [dept, rows] of Object.entries(byDept)) {
+      const avg = Math.round((rows.reduce((s, r) => s + r.score / r.total, 0) / rows.length) * 100);
+      if (y > 250) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.setFontSize(12);
+      doc.setTextColor(0);
+      doc.text(`${dept} - promedio ${avg}% (${rows.length} evaluaciones)`, 14, y);
+      autoTable(doc, {
+        startY: y + 3,
+        head: [["Empleado", "Nota", "%", "Fecha"]],
+        body: rows.map((r) => [
+          r.employee_name,
+          `${r.score}/${r.total}`,
+          `${Math.round((r.score / r.total) * 100)}%`,
+          new Date(r.created_at).toLocaleString("es-SV"),
+        ]),
+        headStyles: { fillColor: [227, 6, 19] },
+        styles: { fontSize: 9 },
+        margin: { left: 14, right: 14 },
+      });
+      y = (doc as any).lastAutoTable.finalY + 12;
+    }
+
+    doc.save(`respuestas-por-departamento-${new Date().toISOString().slice(0, 10)}.pdf`);
   }
 
   if (!data) {
@@ -273,7 +335,7 @@ export default function Dashboard() {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={load} disabled={loading} style={refreshBtnStyle}>{loading ? "Actualizando..." : "🔄 Actualizar"}</button>
-          <button onClick={downloadPdf} style={pdfBtnStyle}>⬇ PDF general</button>
+          <button onClick={downloadPdf} style={pdfBtnStyle}>⬇ PDF por departamentos</button>
         </div>
       </div>
 
@@ -449,7 +511,12 @@ function SubmissionDetailModal({ id, password, onClose }: { id: number; password
           <h3 style={{ margin: 0, fontWeight: 700, color: BRAND_BLACK }}>
             {detail ? `${detail.submission.employee_name} — ${detail.submission.department}` : "Cargando..."}
           </h3>
-          <button onClick={onClose} style={closeBtnStyle}>✕</button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {detail && (
+              <button onClick={() => generateEvaluationPdf(detail)} style={modalPdfBtnStyle}>⬇ Descargar PDF</button>
+            )}
+            <button onClick={onClose} style={closeBtnStyle}>✕</button>
+          </div>
         </div>
         {loading && <p>Cargando evaluación...</p>}
         {detail && (
@@ -639,6 +706,7 @@ const pdfBtnStyle: React.CSSProperties = { background: BRAND_BLACK, color: "whit
 const deleteBtnStyle: React.CSSProperties = { background: "white", color: BRAND_RED, border: `1px solid ${BRAND_RED}`, borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontWeight: 700 };
 const viewBtnStyle: React.CSSProperties = { background: BRAND_BLACK, color: "white", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontWeight: 700 };
 const userPdfBtnStyle: React.CSSProperties = { background: "white", color: BRAND_BLACK, border: "1px solid #ccc", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontWeight: 700 };
+const modalPdfBtnStyle: React.CSSProperties = { background: BRAND_BLACK, color: "white", border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 12, cursor: "pointer", fontWeight: 700 };
 const closeBtnStyle: React.CSSProperties = { background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#556" };
 const overlayStyle: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 };
 const modalStyle: React.CSSProperties = { background: "white", borderRadius: 16, padding: 24, maxWidth: 680, width: "100%", maxHeight: "85vh", overflowY: "auto" };
