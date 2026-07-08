@@ -124,8 +124,18 @@ export async function GET(req: Request) {
     tip: tipsBySection[s.section_id] || "Repasar este proceso en el manual.",
   }));
 
+  const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
+  let dbDiagnostic = "sin variable de conexión";
+  try {
+    const u = new URL(connectionString);
+    dbDiagnostic = `host=${u.hostname} db=${u.pathname.replace("/", "")} varUsada=${process.env.DATABASE_URL ? "DATABASE_URL" : "POSTGRES_URL"}`;
+  } catch {
+    dbDiagnostic = "no se pudo parsear la connection string";
+  }
+
   return NextResponse.json(
     {
+      _diagnostic: dbDiagnostic,
       overall: (overallRows as any[])[0],
       weakestQuestions: weakestQuestionsWithDept,
       byDepartment: byDepartmentRows,
