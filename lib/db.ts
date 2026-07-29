@@ -30,5 +30,9 @@ export async function ensureSchema() {
   // Guarda la respuesta real de la persona (para poder ver el detalle de su evaluación)
   await sql`ALTER TABLE answers ADD COLUMN IF NOT EXISTS answer_data JSONB;`;
 
+  // Soporte multi-evaluación: cada respuesta queda etiquetada con a qué cuestionario pertenece.
+  // Las filas existentes (de antes de este cambio) se asumen del cuestionario original "procesos".
+  await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS quiz_id TEXT NOT NULL DEFAULT 'procesos';`;
+
   initialized = true;
 }

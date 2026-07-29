@@ -1,29 +1,7 @@
-export type MCQuestion = {
-  id: string;
-  type: "mc";
-  text: string;
-  options: string[];
-  correctIndex: number;
-};
+import { Section } from "@/lib/quiz-types";
+import { Quiz } from "@/lib/quiz-types";
 
-export type OrderQuestion = {
-  id: string;
-  type: "order";
-  text: string;
-  steps: string[]; // steps[i] es el paso que va en la posición i
-};
-
-export type Question = MCQuestion | OrderQuestion;
-
-export type Section = {
-  id: string;
-  title: string;
-  colorLabel: string; // color departamental del manual
-  tip: string; // consejo de reentrenamiento si esta sección sale débil
-  questions: Question[];
-};
-
-export const DEPARTMENTS = [
+export const PROCESOS_DEPARTMENTS = [
   "Planificación",
   "Operaciones",
   "Coordinación",
@@ -32,7 +10,7 @@ export const DEPARTMENTS = [
   "Ventas / Contratos",
 ];
 
-export const SECTIONS: Section[] = [
+export const PROCESOS_SECTIONS: Section[] = [
   {
     id: "planificacion",
     title: "Planificación de Carga Diaria",
@@ -373,12 +351,10 @@ export const SECTIONS: Section[] = [
   },
 ];
 
-export const ALL_QUESTIONS: ((MCQuestion & { sectionId: string; sectionTitle: string }) | (OrderQuestion & { sectionId: string; sectionTitle: string }))[] =
-  SECTIONS.flatMap((s) =>
-    s.questions.map((q) => {
-      if (q.type === "mc") {
-        return { ...q, sectionId: s.id, sectionTitle: s.title };
-      }
-      return { ...q, sectionId: s.id, sectionTitle: s.title };
-    })
-  );
+export const PROCESOS_QUIZ: Quiz = {
+  id: "procesos",
+  title: "Manual de Procesos",
+  description: "Evaluación de conocimiento del Manual de Procesos por Departamento (30 preguntas).",
+  classification: { type: "select", label: "Departamento", options: PROCESOS_DEPARTMENTS },
+  sections: PROCESOS_SECTIONS,
+};

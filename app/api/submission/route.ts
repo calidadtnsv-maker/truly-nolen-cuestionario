@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   await ensureSchema();
 
   const subRows = await sql`
-    SELECT id, employee_name, department, score, total, created_at
+    SELECT id, employee_name, department, score, total, created_at, quiz_id
     FROM submissions WHERE id = ${id};
   `;
   if ((subRows as any[]).length === 0) {

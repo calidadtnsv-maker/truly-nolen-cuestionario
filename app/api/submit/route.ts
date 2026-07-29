@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/neon";
 import { ensureSchema } from "@/lib/db";
-import { ALL_QUESTIONS, SECTIONS } from "@/lib/questions";
+import { getQuiz, getAllQuestions } from "@/lib/quizzes/registry";
 
 export const dynamic = "force-dynamic";
 
@@ -12,18 +12,24 @@ type ResponseValue = MCResponse | OrderResponse;
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { employeeName, department, responses } = body as {
+    const { quizId, employeeName, department, responses } = body as {
+      quizId: string;
       employeeName: string;
       department: string;
       responses: Record<string, ResponseValue>;
     };
 
+    const quiz = getQuiz(quizId);
+    if (!quiz) {
+      return NextResponse.json({ error: "Evaluación no encontrada" }, { status: 404 });
+    }
     if (!employeeName || !department || !responses) {
       return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
     }
 
     await ensureSchema();
 
+    const ALL_QUESTIONS = getAllQuestions(quizId);
     let score = 0;
     const total = ALL_QUESTIONS.length;
 
@@ -59,8 +65,8 @@ export async function POST(req: Request) {
     });
 
     const rows = await sql`
-      INSERT INTO submissions (employee_name, department, score, total)
-      VALUES (${employeeName}, ${department}, ${score}, ${total})
+      INSERT INTO submissions (employee_name, department, score, total, quiz_id)
+      VALUES (${employeeName}, ${department}, ${score}, ${total}, ${quizId})
       RETURNING id;
     `;
     const submissionId = (rows as any[])[0].id;
@@ -74,7 +80,7 @@ export async function POST(req: Request) {
 
     // Consejo personalizado: cualquier sección donde falló al menos una pregunta
     const tipsBySection: Record<string, string> = {};
-    SECTIONS.forEach((s) => (tipsBySection[s.id] = s.tip));
+    quiz.sections.forEach((s) => (tipsBySection[s.id] = s.tip));
 
     const reinforce = Object.entries(sectionScores)
       .filter(([, v]) => v.correct < v.total)

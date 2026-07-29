@@ -1,18 +1,21 @@
 import { NextResponse } from "next/server";
 import { getClient } from "@/lib/neon";
 import { ensureSchema } from "@/lib/db";
-import { SECTIONS } from "@/lib/questions";
+import { getQuiz } from "@/lib/quizzes/registry";
 
 export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
-export const revalidate = 0;
 
-export async function GET(req: Request) {
+export async function GET(req: Request, { params }: { params: { quizId: string } }) {
   const { searchParams } = new URL(req.url);
   const pass = searchParams.get("password");
+  const quizId = params.quizId;
 
   if (pass !== process.env.DASHBOARD_PASSWORD) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+  const quiz = getQuiz(quizId);
+  if (!quiz) {
+    return NextResponse.json({ error: "Evaluación no encontrada" }, { status: 404 });
   }
 
   await ensureSchema();
@@ -31,15 +34,17 @@ export async function GET(req: Request) {
     recentRows,
     allSubmissionsRows,
   ] = await sql.transaction([
-    sql`SELECT COUNT(*)::int AS total_submissions, AVG(score::float / total)::float AS avg_ratio FROM submissions;`,
+    sql`SELECT COUNT(*)::int AS total_submissions, AVG(score::float / total)::float AS avg_ratio FROM submissions WHERE quiz_id = ${quizId};`,
     sql`
-      SELECT question_id, section_title,
+      SELECT a.question_id, a.section_title,
              COUNT(*)::int AS total_answers,
-             SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::int AS correct_answers
-      FROM answers
-      GROUP BY question_id, section_title
-      HAVING SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::float / COUNT(*) < 1
-      ORDER BY (SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::float / COUNT(*)) ASC
+             SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END)::int AS correct_answers
+      FROM answers a
+      JOIN submissions s ON a.submission_id = s.id
+      WHERE s.quiz_id = ${quizId}
+      GROUP BY a.question_id, a.section_title
+      HAVING SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END)::float / COUNT(*) < 1
+      ORDER BY (SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END)::float / COUNT(*)) ASC
       LIMIT 10;
     `,
     sql`
@@ -48,11 +53,13 @@ export async function GET(req: Request) {
              SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END)::int AS correct_answers
       FROM answers a
       JOIN submissions s ON a.submission_id = s.id
+      WHERE s.quiz_id = ${quizId}
       GROUP BY a.question_id, s.department;
     `,
     sql`
       SELECT department, COUNT(*)::int AS submissions, AVG(score::float / total)::float AS avg_ratio
       FROM submissions
+      WHERE quiz_id = ${quizId}
       GROUP BY department
       ORDER BY avg_ratio DESC;
     `,
@@ -62,6 +69,7 @@ export async function GET(req: Request) {
              SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END)::int AS correct_answers
       FROM answers a
       JOIN submissions s ON a.submission_id = s.id
+      WHERE s.quiz_id = ${quizId}
       GROUP BY s.department, a.section_id, a.section_title
       ORDER BY s.department, (SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END)::float / COUNT(*)) ASC;
     `,
@@ -72,28 +80,33 @@ export async function GET(req: Request) {
              AVG(score::float / total)::float AS avg_ratio,
              MAX(created_at) AS last_attempt
       FROM submissions
+      WHERE quiz_id = ${quizId}
       GROUP BY employee_name
       ORDER BY avg_ratio DESC;
     `,
     sql`
-      SELECT section_id, section_title,
+      SELECT a.section_id, a.section_title,
              COUNT(*)::int AS total_answers,
-             SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::int AS correct_answers
-      FROM answers
-      GROUP BY section_id, section_title
-      HAVING SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::float / COUNT(*) < 1
-      ORDER BY (SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::float / COUNT(*)) ASC
+             SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END)::int AS correct_answers
+      FROM answers a
+      JOIN submissions s ON a.submission_id = s.id
+      WHERE s.quiz_id = ${quizId}
+      GROUP BY a.section_id, a.section_title
+      HAVING SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END)::float / COUNT(*) < 1
+      ORDER BY (SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END)::float / COUNT(*)) ASC
       LIMIT 10;
     `,
     sql`
       SELECT id, employee_name, department, score, total, created_at
       FROM submissions
+      WHERE quiz_id = ${quizId}
       ORDER BY created_at DESC
       LIMIT 25;
     `,
     sql`
       SELECT id, employee_name, department, score, total, created_at
       FROM submissions
+      WHERE quiz_id = ${quizId}
       ORDER BY employee_name ASC, created_at DESC
       LIMIT 500;
     `,
@@ -118,7 +131,7 @@ export async function GET(req: Request) {
   const bottomPerformers = [...personRows].slice(-10).reverse();
 
   const tipsBySection: Record<string, string> = {};
-  SECTIONS.forEach((s) => (tipsBySection[s.id] = s.tip));
+  quiz.sections.forEach((s) => (tipsBySection[s.id] = s.tip));
   const reinforcementRanking = (bySectionRows as any[]).map((s) => ({
     sectionId: s.section_id,
     sectionTitle: s.section_title,
@@ -126,30 +139,10 @@ export async function GET(req: Request) {
     tip: tipsBySection[s.section_id] || "Repasar este proceso en el manual.",
   }));
 
-  const connectionString =
-    process.env.POSTGRES_URL_NON_POOLING ||
-    process.env.DATABASE_URL_UNPOOLED ||
-    process.env.DATABASE_URL ||
-    process.env.POSTGRES_URL ||
-    "";
-  let dbDiagnostic = "sin variable de conexión";
-  try {
-    const u = new URL(connectionString);
-    const varUsada = process.env.POSTGRES_URL_NON_POOLING
-      ? "POSTGRES_URL_NON_POOLING"
-      : process.env.DATABASE_URL_UNPOOLED
-      ? "DATABASE_URL_UNPOOLED"
-      : process.env.DATABASE_URL
-      ? "DATABASE_URL"
-      : "POSTGRES_URL";
-    dbDiagnostic = `host=${u.hostname} db=${u.pathname.replace("/", "")} varUsada=${varUsada}`;
-  } catch {
-    dbDiagnostic = "no se pudo parsear la connection string";
-  }
-
   return NextResponse.json(
     {
-      _diagnostic: dbDiagnostic,
+      quizTitle: quiz.title,
+      classificationLabel: quiz.classification.label,
       overall: (overallRows as any[])[0],
       weakestQuestions: weakestQuestionsWithDept,
       byDepartment: byDepartmentRows,
