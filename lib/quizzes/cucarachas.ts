@@ -201,10 +201,19 @@ export const CUCARACHAS_SECTIONS: Section[] = [
   },
 ];
 
+export const CUCARACHAS_ZONAS = [
+  "Operaciones central AM",
+  "Operaciones central PM",
+  "Operaciones Paracentral",
+  "Operaciones Oriental",
+  "Operaciones Occidental",
+  "Ventas",
+];
+
 export const CUCARACHAS_QUIZ: Quiz = {
   id: "cucarachas",
   title: "Control de Cucaracha Alemana",
   description: "Capacitación técnica para el manejo y control de cucarachas germánicas (Blattella germanica) — 15 preguntas.",
-  classification: { type: "text", label: "Sucursal", placeholder: "Ej. San Salvador, Santa Ana..." },
+  classification: { type: "select", label: "Departamento / Turno / Zona", options: CUCARACHAS_ZONAS },
   sections: CUCARACHAS_SECTIONS,
 };
