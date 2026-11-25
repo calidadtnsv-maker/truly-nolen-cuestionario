@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 
 type MCResponse = { type: "mc"; selectedIndex: number };
 type OrderResponse = { type: "order"; order: number[] };
-type ResponseValue = MCResponse | OrderResponse;
+type MCMultiResponse = { type: "mc-multi"; selectedIndices: number[] };
+type ResponseValue = MCResponse | OrderResponse | MCMultiResponse;
 
 export async function POST(req: Request) {
   try {
@@ -46,6 +47,11 @@ export async function POST(req: Request) {
           isCorrect =
             r.order.length === correctOrder.length &&
             r.order.every((v, i) => v === correctOrder[i]);
+        } else if (q.type === "mc-multi" && r.type === "mc-multi") {
+          const correct = [...q.correctIndices].sort((a, b) => a - b);
+          const given = [...r.selectedIndices].sort((a, b) => a - b);
+          isCorrect =
+            correct.length === given.length && correct.every((v, i) => v === given[i]);
         }
       }
       if (isCorrect) score += 1;

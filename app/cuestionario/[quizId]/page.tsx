@@ -12,7 +12,8 @@ const BRAND_BLACK = "#111111";
 type Step = "intro" | "quiz" | "done";
 type MCResponse = { type: "mc"; selectedIndex: number };
 type OrderResponse = { type: "order"; order: number[] };
-type ResponseValue = MCResponse | OrderResponse;
+type MCMultiResponse = { type: "mc-multi"; selectedIndices: number[] };
+type ResponseValue = MCResponse | OrderResponse | MCMultiResponse;
 type ReinforceTip = { sectionId: string; sectionTitle: string; correct: number; total: number; tip: string };
 
 function shuffledIndices(n: number) {
@@ -64,6 +65,17 @@ export default function QuizPage() {
     setResponses((prev) => ({ ...prev, [q.id]: { type: "mc", selectedIndex: optionIndex } }));
   }
 
+  function toggleMCMulti(optionIndex: number) {
+    setResponses((prev) => {
+      const existing = prev[q.id];
+      const current = existing && existing.type === "mc-multi" ? existing.selectedIndices : [];
+      const next = current.includes(optionIndex)
+        ? current.filter((i) => i !== optionIndex)
+        : [...current, optionIndex].sort((a, b) => a - b);
+      return { ...prev, [q.id]: { type: "mc-multi", selectedIndices: next } };
+    });
+  }
+
   function confirmOrderAndNext(draft: number[]) {
     setResponses((prev) => ({ ...prev, [q.id]: { type: "order", order: draft } }));
     setOrderDraft(null);
@@ -71,7 +83,10 @@ export default function QuizPage() {
   }
 
   function answered() {
-    return !!responses[q.id];
+    const r = responses[q.id];
+    if (!r) return false;
+    if (r.type === "mc-multi") return r.selectedIndices.length > 0;
+    return true;
   }
 
   function goNext() {
@@ -190,27 +205,52 @@ export default function QuizPage() {
           {q.type === "order" && (
             <OrderQuestionUI steps={q.steps} draft={currentOrderDraft(q)} onChange={(d) => setOrderDraft(d)} />
           )}
+
+          {q.type === "mc-multi" && (
+            <div>
+              <p style={{ fontSize: 13, color: "#667", marginTop: -4 }}>
+                Esta pregunta puede tener más de una respuesta correcta. Marca todas las que apliquen.
+              </p>
+              {q.options.map((opt, oi) => {
+                const r = responses[q.id];
+                const selected = !!(r && r.type === "mc-multi" && r.selectedIndices.includes(oi));
+                return (
+                  <label
+                    key={oi}
+                    style={{
+                      ...optionLabel,
+                      background: selected ? "#fff0f0" : "transparent",
+                      border: selected ? `1px solid ${BRAND_RED}` : "1px solid #e6e6e6",
+                    }}
+                  >
+                    <input type="checkbox" checked={selected} onChange={() => toggleMCMulti(oi)} style={{ marginRight: 8 }} />
+                    {opt}
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {error && <p style={{ color: "crimson" }}>{error}</p>}
 
         <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
           {qIndex > 0 && <button style={secondaryButtonStyle} onClick={goBack}>Atrás</button>}
-          {q.type === "mc" ? (
-            <button
-              style={{ ...buttonStyle, opacity: answered() && !submitting ? 1 : 0.5 }}
-              disabled={!answered() || submitting}
-              onClick={goNext}
-            >
-              {isLast ? (submitting ? "Guardando..." : "Finalizar y calificar") : "Siguiente"}
-            </button>
-          ) : (
+          {q.type === "order" ? (
             <button
               style={{ ...buttonStyle, opacity: submitting ? 0.5 : 1 }}
               disabled={submitting}
               onClick={() => confirmOrderAndNext(currentOrderDraft(q))}
             >
               {isLast ? (submitting ? "Guardando..." : "Confirmar orden y finalizar") : "Confirmar orden y siguiente"}
+            </button>
+          ) : (
+            <button
+              style={{ ...buttonStyle, opacity: answered() && !submitting ? 1 : 0.5 }}
+              disabled={!answered() || submitting}
+              onClick={goNext}
+            >
+              {isLast ? (submitting ? "Guardando..." : "Finalizar y calificar") : "Siguiente"}
             </button>
           )}
         </div>
