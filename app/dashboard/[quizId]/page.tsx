@@ -188,6 +188,18 @@ export default function QuizDashboard() {
               return `<li style="color:${color};font-weight:${weight};">${opt}${tags}</li>`;
             })
             .join("")}</ul>`;
+        } else if (q.type === "mc-multi") {
+          const selectedSet = new Set<number>(answerData?.selectedIndices || []);
+          body = `<ul style="margin:0;padding-left:18px;">${q.options
+            .map((opt: string, oi: number) => {
+              const isSelected = selectedSet.has(oi);
+              const isCorrectOpt = q.correctIndices.includes(oi);
+              const color = isCorrectOpt ? "#1B7A3D" : isSelected ? "#E30613" : "#334";
+              const weight = isSelected || isCorrectOpt ? 700 : 400;
+              const tags = `${isCorrectOpt ? " (correcta)" : ""}${isSelected && !isCorrectOpt ? " (su respuesta)" : ""}`;
+              return `<li style="color:${color};font-weight:${weight};">${opt}${tags}</li>`;
+            })
+            .join("")}</ul>`;
         } else {
           const given =
             answerData && answerData.order
@@ -616,6 +628,24 @@ function SubmissionDetailModal({
                         {q.options.map((opt: string, oi: number) => {
                           const isSelected = answerData?.selectedIndex === oi;
                           const isCorrectOpt = q.correctIndex === oi;
+                          return (
+                            <li
+                              key={oi}
+                              style={{
+                                color: isCorrectOpt ? GOOD : isSelected ? BAD : "#334",
+                                fontWeight: isSelected || isCorrectOpt ? 700 : 400,
+                              }}
+                            >
+                              {opt} {isCorrectOpt ? "(correcta)" : ""} {isSelected && !isCorrectOpt ? "(su respuesta)" : ""}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : q.type === "mc-multi" ? (
+                      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
+                        {q.options.map((opt: string, oi: number) => {
+                          const isSelected = (answerData?.selectedIndices || []).includes(oi);
+                          const isCorrectOpt = q.correctIndices.includes(oi);
                           return (
                             <li
                               key={oi}

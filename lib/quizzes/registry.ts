@@ -3,8 +3,9 @@ import { PROCESOS_QUIZ } from "@/lib/quizzes/procesos";
 import { CUCARACHAS_QUIZ } from "@/lib/quizzes/cucarachas";
 import { HORMIGAS_QUIZ } from "@/lib/quizzes/hormigas";
 import { ROEDORES_QUIZ } from "@/lib/quizzes/roedores";
+import { CEBOS_QUIZ } from "@/lib/quizzes/cebos";
 
-export const QUIZZES: Quiz[] = [PROCESOS_QUIZ, CUCARACHAS_QUIZ, HORMIGAS_QUIZ, ROEDORES_QUIZ];
+export const QUIZZES: Quiz[] = [PROCESOS_QUIZ, CUCARACHAS_QUIZ, HORMIGAS_QUIZ, ROEDORES_QUIZ, CEBOS_QUIZ];
 
 export function getQuiz(quizId: string): Quiz | undefined {
   return QUIZZES.find((q) => q.id === quizId);

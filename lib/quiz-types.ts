@@ -13,7 +13,15 @@ export type OrderQuestion = {
   steps: string[]; // steps[i] es el paso que va en la posición i
 };
 
-export type Question = MCQuestion | OrderQuestion;
+export type MCMultiQuestion = {
+  id: string;
+  type: "mc-multi";
+  text: string;
+  options: string[];
+  correctIndices: number[]; // puede haber más de una respuesta correcta
+};
+
+export type Question = MCQuestion | OrderQuestion | MCMultiQuestion;
 
 export type Section = {
   id: string;
@@ -25,7 +33,8 @@ export type Section = {
 
 export type AnyQuestion =
   | (MCQuestion & { sectionId: string; sectionTitle: string })
-  | (OrderQuestion & { sectionId: string; sectionTitle: string });
+  | (OrderQuestion & { sectionId: string; sectionTitle: string })
+  | (MCMultiQuestion & { sectionId: string; sectionTitle: string });
 
 // Campo de clasificación del respondedor: puede ser una lista fija (ej. Departamento)
 // o un campo de texto libre (ej. Sucursal), según lo que tenga sentido por evaluación.
